@@ -1,84 +1,77 @@
 # supertokens — Project Context
 
 ## Overview
-Self-hosted SuperTokens Core running on Kubernetes (Helm). Provides authentication primitives (sessions, users, recipes) to all backend services via the SuperTokens SDK. Services never call it directly from the frontend.
+Self-hosted SuperTokens Core on Kubernetes (Helm). Provides auth primitives (sessions, users, recipes) to backend services via the SuperTokens SDK. Never called from the frontend.
 
 ## Architecture
 
 ```
-Backend SDK (supertokens-node / supertokens-python / etc.)
+Backend SDK (supertokens-node / supertokens-python)
     |
     | HTTP  connectionURI: http://supertokens:3567
     v
-SuperTokens Core  (Helm: supertokens/supertokens-postgresql)
+SuperTokens Core  (supertokens/supertokens-postgresql)
     |
     | JDBC
     v
-PostgreSQL >= 13.0  (RDS — shared with other services per namespace)
+PostgreSQL >= 13.0  (RDS — shared per namespace)
 ```
 
 ## Key Facts
-- **Default port:** 3567
-- **Database:** PostgreSQL only (MySQL/MongoDB dropped in v11)
+- **Port:** 3567
+- **Database:** PostgreSQL only (13.0+)
 - **Tables:** auto-created on first run if DB user has CREATE TABLE permission
-- **API key:** optional; not set by default — add via `API_KEYS` env var
 - **Image:** `supertokens/supertokens-postgresql`
-- **Helm chart:** `supertokens/supertokens` (from supertokens Helm repo)
-
-## Environments & Namespaces
-
-| Environment | Namespace | RDS Host |
-|-------------|-----------|----------|
-| UAT | jupiter, venus, saturn, mars, mercury | prosperix-uat-17 |
-| Sandbox | default | prosperix-uat-17 |
-| Prod | default | prosperix-prod-17 |
-
-## Configuration
-
-Primary config via environment variables (prefer `POSTGRESQL_CONNECTION_URI` over individual vars):
-
-```yaml
-# helm/values/base.yaml
-env:
-  POSTGRESQL_CONNECTION_URI: "postgresql://<user>:<pass>@<host>:5432/<db>"
-  API_KEYS: ""   # leave empty unless you need to lock down the core
-```
-
-Secrets (DB credentials) live in K8s secrets: `uat-env`, `sandbox-env`, `prod-env` — same pattern as service-bus.
+- **API key:** disabled by default; enable via `API_KEYS` env var
+- **In-memory mode:** `docker run -p 3567:3567 supertokens/supertokens-postgresql:latest` — no Postgres needed, for testing only
 
 ## File Structure
 
 ```
 supertokens/
+├── docker-compose.yaml     # local dev with Postgres
 ├── helm/
+│   ├── Chart.yaml
+│   ├── deploy.sh           # ./deploy.sh <env> <namespace>
+│   ├── templates/
+│   │   ├── _helpers.tpl
+│   │   ├── deployment.yaml
+│   │   └── service.yaml
 │   └── values/
-│       ├── base.yaml        # shared defaults
-│       ├── uat.yaml         # UAT overrides
-│       ├── sandbox.yaml
-│       └── prod.yaml
-└── .github/workflows/
-    ├── deploy_uat.yml
-    └── deploy_production.yml
+│       ├── base.yaml       # image, resources, probe defaults
+│       ├── uat.yaml        # uat-env secret, tableNamesPrefix: uat
+│       ├── sandbox.yaml    # sandbox-env secret
+│       └── prod.yaml       # 2 replicas, prod-env secret, higher resources
 ```
+
+## Secrets Convention
+DB connection URI comes from K8s secrets (same pattern as service-bus):
+- `uat-env` → key `SUPERTOKENS_DB_URI`
+- `sandbox-env` → key `SUPERTOKENS_DB_URI`
+- `prod-env` → key `SUPERTOKENS_DB_URI`
 
 ## Common Tasks
 
-### Deploy to a namespace
+### Local dev
 ```bash
-helm upgrade --install supertokens supertokens/supertokens \
-  -f helm/values/base.yaml \
-  -f helm/values/uat.yaml \
-  -n jupiter
+docker compose up                    # SuperTokens + Postgres
+curl http://localhost:3567/hello     # → OK
 ```
 
-### Health check
+### Deploy to Kubernetes
 ```bash
-kubectl exec -n jupiter deploy/supertokens -- curl localhost:3567/hello
+./helm/deploy.sh uat default
+./helm/deploy.sh prod default
+```
+
+### Health check in cluster
+```bash
+kubectl exec -n <ns> deploy/supertokens -- curl localhost:3567/hello
 ```
 
 ### Add enterprise license
 ```bash
-kubectl exec -n jupiter deploy/supertokens -- \
+kubectl exec -n <ns> deploy/supertokens -- \
   curl -X PUT localhost:3567/ee/license \
   -H "Content-Type: application/json" \
   -d '{"licenseKey": "<key>"}'
@@ -86,10 +79,10 @@ kubectl exec -n jupiter deploy/supertokens -- \
 
 ### Troubleshooting
 ```bash
-# Check core logs
-kubectl logs -n jupiter deploy/supertokens
+# Logs
+kubectl logs -n <ns> deploy/supertokens
 
-# Verify DB connectivity (should return table rows)
-kubectl exec -n jupiter deploy/supertokens -- \
+# Verify DB connectivity
+kubectl exec -n <ns> deploy/supertokens -- \
   curl localhost:3567/recipe/jwt/jwks
 ```

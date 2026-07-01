@@ -1,0 +1,7 @@
+replicaCount: 1
+
+db:
+  secretName: sandbox-env
+  connectionUriKey: SUPERTOKENS_DB_URI
+
+tableNamesPrefix: "sandbox"

@@ -1,0 +1,33 @@
+services:
+  supertokens:
+    image: supertokens/supertokens-postgresql:latest
+    ports:
+      - "3567:3567"
+    environment:
+      POSTGRESQL_CONNECTION_URI: postgresql://supertokens:supertokens@db:5432/supertokens
+      DISABLE_TELEMETRY: "true"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3567/hello"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: supertokens
+      POSTGRES_PASSWORD: supertokens
+      POSTGRES_DB: supertokens
+    volumes:
+      - supertokens_db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U supertokens"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  supertokens_db:

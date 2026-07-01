@@ -1,0 +1,36 @@
+replicaCount: 1
+
+image:
+  repository: supertokens/supertokens-postgresql
+  tag: "9.3.0"
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 3567
+
+# PostgreSQL credentials secret
+# Secret must contain key specified by db.connectionUriKey
+db:
+  secretName: supertokens-db
+  connectionUriKey: POSTGRESQL_CONNECTION_URI
+
+# Optional: namespace-prefix for all SuperTokens tables in Postgres
+tableNamesPrefix: ""
+
+# Optional API key to protect the core (leave enabled: false for internal-only clusters)
+apiKey:
+  enabled: false
+  secretName: supertokens-api-key
+  secretKey: API_KEYS
+
+# Disable usage analytics sent to SuperTokens servers
+disableTelemetry: "true"
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi

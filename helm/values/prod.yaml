@@ -1,0 +1,17 @@
+replicaCount: 2
+
+db:
+  secretName: prod-env
+  connectionUriKey: SUPERTOKENS_DB_URI
+
+tableNamesPrefix: ""
+
+disableTelemetry: "true"
+
+resources:
+  requests:
+    cpu: 200m
+    memory: 256Mi
+  limits:
+    cpu: 1000m
+    memory: 512Mi

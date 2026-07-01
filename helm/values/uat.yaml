@@ -1,0 +1,7 @@
+replicaCount: 1
+
+db:
+  secretName: uat-env
+  connectionUriKey: SUPERTOKENS_DB_URI
+
+tableNamesPrefix: "uat"
