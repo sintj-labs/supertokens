@@ -1,67 +1,38 @@
 #!/bin/bash
-# Deploy SuperTokens + a dedicated PostgreSQL pod to the local k3d cluster.
-# Does not touch the host machine's PostgreSQL.
+# Deploy SuperTokens to local k3d cluster, connecting to the host machine's
+# PostgreSQL via host.k3d.internal.
+#
+# One-time postgres setup (run once if supertokens can't reach the host DB):
+#   1. In /opt/homebrew/var/postgresql@14/postgresql.conf:
+#        listen_addresses = '*'
+#   2. In /opt/homebrew/var/postgresql@14/pg_hba.conf (append):
+#        host    all    all    0.0.0.0/0    trust
+#   3. brew services restart postgresql@14
 set -e
 
 NAMESPACE=default
+DB_USER=surat
+DB_HOST=host.k3d.internal
+DB_PORT=5432
+DB_NAME=supertokens
 SECRET_NAME=supertokens-db
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
-# ── 1. Deploy PostgreSQL inside k3d ──────────────────────────────────────────
-kubectl apply -n "$NAMESPACE" -f - <<'EOF'
-apiVersion: v1
-kind: Service
-metadata:
-  name: supertokens-postgres
-spec:
-  selector:
-    app: supertokens-postgres
-  ports:
-    - port: 5432
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: supertokens-postgres
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: supertokens-postgres
-  template:
-    metadata:
-      labels:
-        app: supertokens-postgres
-    spec:
-      containers:
-        - name: postgres
-          image: postgres:15
-          env:
-            - name: POSTGRES_USER
-              value: surat
-            - name: POSTGRES_PASSWORD
-              value: ""
-            - name: POSTGRES_DB
-              value: supertokens
-          ports:
-            - containerPort: 5432
-          readinessProbe:
-            exec:
-              command: ["pg_isready", "-U", "surat"]
-            initialDelaySeconds: 5
-            periodSeconds: 5
-EOF
-
-echo "Waiting for postgres to be ready..."
-kubectl rollout status deployment/supertokens-postgres -n "$NAMESPACE"
+# ── 1. Create the database if it doesn't exist ───────────────────────────────
+if ! psql -U "$DB_USER" -lqt | cut -d'|' -f1 | grep -qw "$DB_NAME"; then
+  echo "Creating database '$DB_NAME'..."
+  psql -U "$DB_USER" -c "CREATE DATABASE $DB_NAME;"
+else
+  echo "Database '$DB_NAME' already exists."
+fi
 
 # ── 2. Create (or update) the k8s secret ─────────────────────────────────────
 kubectl create secret generic "$SECRET_NAME" \
-  --from-literal=POSTGRESQL_HOST="supertokens-postgres" \
-  --from-literal=POSTGRESQL_PORT="5432" \
-  --from-literal=POSTGRESQL_USER="surat" \
+  --from-literal=POSTGRESQL_HOST="$DB_HOST" \
+  --from-literal=POSTGRESQL_PORT="$DB_PORT" \
+  --from-literal=POSTGRESQL_USER="$DB_USER" \
   --from-literal=POSTGRESQL_PASSWORD="" \
-  --from-literal=POSTGRESQL_DATABASE_NAME="supertokens" \
+  --from-literal=POSTGRESQL_DATABASE_NAME="$DB_NAME" \
   --namespace "$NAMESPACE" \
   --dry-run=client -o yaml | kubectl apply -f -
 
