@@ -1,6 +1,6 @@
 #!/bin/bash
 # Deploy SuperTokens to local k3d cluster, connecting to the host machine's
-# PostgreSQL via host.k3d.internal.
+# PostgreSQL via host.docker.internal (Docker Desktop resolves this to the host).
 #
 # One-time postgres setup (run once if supertokens can't reach the host DB):
 #   1. In /opt/homebrew/var/postgresql@14/postgresql.conf:
@@ -12,7 +12,7 @@ set -e
 
 NAMESPACE=default
 DB_USER=surat
-DB_HOST=host.k3d.internal
+DB_HOST=host.docker.internal
 DB_PORT=5432
 DB_NAME=supertokens
 SECRET_NAME=supertokens-db
