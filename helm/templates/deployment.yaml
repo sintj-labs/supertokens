@@ -14,6 +14,7 @@ spec:
       labels:
         {{- include "supertokens.selectorLabels" . | nindent 8 }}
     spec:
+      enableServiceLinks: false
       containers:
         - name: supertokens
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
@@ -36,11 +37,39 @@ spec:
             periodSeconds: 5
           env:
             {{- if .Values.db.useSecret }}
+            {{- if .Values.db.useUri }}
             - name: POSTGRESQL_CONNECTION_URI
               valueFrom:
                 secretKeyRef:
                   name: {{ .Values.db.secretName }}
                   key: {{ .Values.db.connectionUriKey }}
+            {{- else }}
+            - name: POSTGRESQL_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.db.secretName }}
+                  key: POSTGRESQL_HOST
+            - name: POSTGRESQL_PORT
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.db.secretName }}
+                  key: POSTGRESQL_PORT
+            - name: POSTGRESQL_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.db.secretName }}
+                  key: POSTGRESQL_USER
+            - name: POSTGRESQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.db.secretName }}
+                  key: POSTGRESQL_PASSWORD
+            - name: POSTGRESQL_DATABASE_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.db.secretName }}
+                  key: POSTGRESQL_DATABASE_NAME
+            {{- end }}
             {{- end }}
             {{- if .Values.apiKey.enabled }}
             - name: API_KEYS

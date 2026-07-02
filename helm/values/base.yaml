@@ -10,9 +10,12 @@ service:
   port: 3567
 
 # PostgreSQL credentials secret
-# Set useSecret: false to run in in-memory mode (local/k3d only — data does not persist)
+# useSecret: false  → in-memory mode (local/k3d only — data does not persist)
+# useUri: true      → secret has POSTGRESQL_CONNECTION_URI key
+# useUri: false     → secret has individual keys: POSTGRESQL_HOST/PORT/USER/PASSWORD/DATABASE_NAME
 db:
   useSecret: true
+  useUri: true
   secretName: supertokens-db
   connectionUriKey: POSTGRESQL_CONNECTION_URI
 
