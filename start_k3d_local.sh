@@ -29,7 +29,7 @@ fi
 echo "Found $PG_SERVICE (data: $PG_DATA)"
 
 # ── 2. Start PostgreSQL if not running ────────────────────────────────────────
-if ! brew services info "$PG_SERVICE" | grep -q "running: true"; then
+if ! brew services list | grep -qE "^$PG_SERVICE\s+started"; then
   echo "Starting $PG_SERVICE..."
   brew services start "$PG_SERVICE"
   sleep 4
@@ -37,15 +37,16 @@ fi
 
 # ── 3. Configure PostgreSQL to accept connections from Docker (k3d) ───────────
 # k3d pods reach the host via host.k3d.internal (Docker bridge IP), not 127.0.0.1.
+# Only patches and restarts if not already configured.
 CHANGED=false
 
-if ! grep -qE "^listen_addresses = '\*'" "$PG_DATA/postgresql.conf"; then
+if ! grep -qF "listen_addresses = '*'" "$PG_DATA/postgresql.conf"; then
   echo "Setting listen_addresses = '*' in postgresql.conf..."
   sed -i '' "s/^#\?listen_addresses = .*/listen_addresses = '*'/" "$PG_DATA/postgresql.conf"
   CHANGED=true
 fi
 
-if ! grep -q "0.0.0.0/0.*trust" "$PG_DATA/pg_hba.conf"; then
+if ! grep -qF "0.0.0.0/0" "$PG_DATA/pg_hba.conf"; then
   echo "Adding trust rule for Docker networks in pg_hba.conf..."
   echo "host    all    all    0.0.0.0/0    trust" >> "$PG_DATA/pg_hba.conf"
   CHANGED=true
