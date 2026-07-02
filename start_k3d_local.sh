@@ -38,16 +38,16 @@ spec:
           image: postgres:15
           env:
             - name: POSTGRES_USER
-              value: supertokens
+              value: surat
             - name: POSTGRES_PASSWORD
-              value: supertokens
+              value: ""
             - name: POSTGRES_DB
               value: supertokens
           ports:
             - containerPort: 5432
           readinessProbe:
             exec:
-              command: ["pg_isready", "-U", "supertokens"]
+              command: ["pg_isready", "-U", "surat"]
             initialDelaySeconds: 5
             periodSeconds: 5
 EOF
@@ -59,8 +59,8 @@ kubectl rollout status deployment/supertokens-postgres -n "$NAMESPACE"
 kubectl create secret generic "$SECRET_NAME" \
   --from-literal=POSTGRESQL_HOST="supertokens-postgres" \
   --from-literal=POSTGRESQL_PORT="5432" \
-  --from-literal=POSTGRESQL_USER="supertokens" \
-  --from-literal=POSTGRESQL_PASSWORD="supertokens" \
+  --from-literal=POSTGRESQL_USER="surat" \
+  --from-literal=POSTGRESQL_PASSWORD="" \
   --from-literal=POSTGRESQL_DATABASE_NAME="supertokens" \
   --namespace "$NAMESPACE" \
   --dry-run=client -o yaml | kubectl apply -f -
