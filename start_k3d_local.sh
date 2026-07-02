@@ -1,78 +1,71 @@
 #!/bin/bash
-# Deploy SuperTokens to local k3d cluster using the host machine's PostgreSQL.
-# Assumes PostgreSQL is installed via Homebrew with user=surat and no password.
+# Deploy SuperTokens + a dedicated PostgreSQL pod to the local k3d cluster.
+# Does not touch the host machine's PostgreSQL.
 set -e
 
 NAMESPACE=default
-DB_USER=surat
-DB_HOST=host.k3d.internal
-DB_PORT=5432
-DB_NAME=supertokens
 SECRET_NAME=supertokens-db
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
-# ── 1. Find Homebrew PostgreSQL ───────────────────────────────────────────────
-BREW_PREFIX=$(brew --prefix)
+# ── 1. Deploy PostgreSQL inside k3d ──────────────────────────────────────────
+kubectl apply -n "$NAMESPACE" -f - <<'EOF'
+apiVersion: v1
+kind: Service
+metadata:
+  name: supertokens-postgres
+spec:
+  selector:
+    app: supertokens-postgres
+  ports:
+    - port: 5432
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: supertokens-postgres
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: supertokens-postgres
+  template:
+    metadata:
+      labels:
+        app: supertokens-postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:15
+          env:
+            - name: POSTGRES_USER
+              value: supertokens
+            - name: POSTGRES_PASSWORD
+              value: supertokens
+            - name: POSTGRES_DB
+              value: supertokens
+          ports:
+            - containerPort: 5432
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "supertokens"]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+EOF
 
-PG_SERVICE=$(ls "$BREW_PREFIX/opt/" | grep -E "^postgresql(@[0-9]+)?$" | sort -V | tail -1)
-if [ -z "$PG_SERVICE" ]; then
-  echo "ERROR: No PostgreSQL found in $BREW_PREFIX/opt/. Install with: brew install postgresql"
-  exit 1
-fi
+echo "Waiting for postgres to be ready..."
+kubectl rollout status deployment/supertokens-postgres -n "$NAMESPACE"
 
-PG_VERSION=$(echo "$PG_SERVICE" | grep -oE '[0-9]+' || true)
-if [ -n "$PG_VERSION" ]; then
-  PG_DATA="$BREW_PREFIX/var/postgresql@$PG_VERSION"
-else
-  PG_DATA="$BREW_PREFIX/var/postgresql"
-fi
-
-echo "Found $PG_SERVICE (data: $PG_DATA)"
-
-# ── 2. Start PostgreSQL if not running ────────────────────────────────────────
-if ! brew services list | grep -qE "^$PG_SERVICE\s+started"; then
-  echo "Starting $PG_SERVICE..."
-  brew services start "$PG_SERVICE"
-  sleep 4
-fi
-
-# ── 3. Configure PostgreSQL to accept connections from Docker (k3d) ───────────
-# k3d pods reach the host via host.k3d.internal (Docker bridge IP), not 127.0.0.1.
-# Only patches and restarts if not already configured.
-CHANGED=false
-
-if ! grep -qF "listen_addresses = '*'" "$PG_DATA/postgresql.conf"; then
-  echo "Setting listen_addresses = '*' in postgresql.conf..."
-  sed -i '' "s/^#\?listen_addresses = .*/listen_addresses = '*'/" "$PG_DATA/postgresql.conf"
-  CHANGED=true
-fi
-
-if ! grep -qF "0.0.0.0/0" "$PG_DATA/pg_hba.conf"; then
-  echo "Adding trust rule for Docker networks in pg_hba.conf..."
-  echo "host    all    all    0.0.0.0/0    trust" >> "$PG_DATA/pg_hba.conf"
-  CHANGED=true
-fi
-
-if [ "$CHANGED" = true ]; then
-  echo "Restarting $PG_SERVICE to apply config changes..."
-  brew services restart "$PG_SERVICE"
-  sleep 5
-fi
-
-# ── 4. Create the supertokens database if it doesn't exist ────────────────────
-psql -U "$DB_USER" -c "CREATE DATABASE $DB_NAME;" 2>/dev/null || true
-
-# ── 5. Create (or update) the k8s secret ─────────────────────────────────────
+# ── 2. Create (or update) the k8s secret ─────────────────────────────────────
 kubectl create secret generic "$SECRET_NAME" \
-  --from-literal=POSTGRESQL_HOST="$DB_HOST" \
-  --from-literal=POSTGRESQL_PORT="$DB_PORT" \
-  --from-literal=POSTGRESQL_USER="$DB_USER" \
-  --from-literal=POSTGRESQL_PASSWORD="" \
-  --from-literal=POSTGRESQL_DATABASE_NAME="$DB_NAME" \
+  --from-literal=POSTGRESQL_HOST="supertokens-postgres" \
+  --from-literal=POSTGRESQL_PORT="5432" \
+  --from-literal=POSTGRESQL_USER="supertokens" \
+  --from-literal=POSTGRESQL_PASSWORD="supertokens" \
+  --from-literal=POSTGRESQL_DATABASE_NAME="supertokens" \
   --namespace "$NAMESPACE" \
   --dry-run=client -o yaml | kubectl apply -f -
 
-# ── 6. Deploy ─────────────────────────────────────────────────────────────────
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+# ── 3. Deploy SuperTokens ─────────────────────────────────────────────────────
 helm upgrade --install supertokens "$SCRIPT_DIR/helm" \
   -f "$SCRIPT_DIR/helm/values/base.yaml" \
   --set db.useUri=false \
