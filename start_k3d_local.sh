@@ -19,7 +19,8 @@ SECRET_NAME=supertokens-db
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 # ── 1. Create the database if it doesn't exist ───────────────────────────────
-if ! psql -U "$DB_USER" -d postgres -lqt | cut -d'|' -f1 | grep -qw "$DB_NAME"; then
+CONNECT_DB=$(psql -U "$DB_USER" -d "$DB_NAME" -c "SELECT 1" &>/dev/null && echo "$DB_NAME" || echo "postgres")
+if ! psql -U "$DB_USER" -d "$CONNECT_DB" -lqt | cut -d'|' -f1 | grep -qw "$DB_NAME"; then
   echo "Creating database '$DB_NAME'..."
   psql -U "$DB_USER" -d postgres -c "CREATE DATABASE $DB_NAME;"
 else
