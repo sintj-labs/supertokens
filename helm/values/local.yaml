@@ -1,0 +1,6 @@
+replicaCount: 1
+
+db:
+  useSecret: false  # in-memory mode — no Postgres needed
+
+tableNamesPrefix: ""

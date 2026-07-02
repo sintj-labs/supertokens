@@ -35,11 +35,13 @@ spec:
             initialDelaySeconds: 5
             periodSeconds: 5
           env:
+            {{- if .Values.db.useSecret }}
             - name: POSTGRESQL_CONNECTION_URI
               valueFrom:
                 secretKeyRef:
                   name: {{ .Values.db.secretName }}
                   key: {{ .Values.db.connectionUriKey }}
+            {{- end }}
             {{- if .Values.apiKey.enabled }}
             - name: API_KEYS
               valueFrom:

@@ -39,6 +39,7 @@ supertokens/
 │   │   └── service.yaml
 │   └── values/
 │       ├── base.yaml       # image, resources, probe defaults
+│       ├── local.yaml      # k3d local — in-memory mode, no Postgres
 │       ├── uat.yaml        # uat-env secret, tableNamesPrefix: uat
 │       ├── sandbox.yaml    # sandbox-env secret
 │       └── prod.yaml       # 2 replicas, prod-env secret, higher resources
@@ -52,10 +53,17 @@ DB connection URI comes from K8s secrets (same pattern as service-bus):
 
 ## Common Tasks
 
-### Local dev
+### Local dev (Docker Compose)
 ```bash
 docker compose up                    # SuperTokens + Postgres
 curl http://localhost:3567/hello     # → OK
+```
+
+### Local k3d (in-memory mode — no Postgres required)
+```bash
+cd helm
+helm upgrade --install supertokens ./ -f ./values/base.yaml -f ./values/local.yaml -n default
+kubectl exec deploy/supertokens -- curl -s localhost:3567/hello   # → OK
 ```
 
 ### Deploy to Kubernetes
